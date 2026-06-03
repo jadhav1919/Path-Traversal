@@ -278,4 +278,4 @@ or
 Normalize and validate paths before reading files.
 
 
-![lab1-](screenshots/lab-.png)
+![lab1-](screenshots/labp1.png)
