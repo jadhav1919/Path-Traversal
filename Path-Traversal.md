@@ -952,7 +952,7 @@ bin:x:2:2:bin:/bin:/usr/sbin/nologin
 www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
 ...
 ```
-![lab1-](screenshots/labbp3.png)
+![lab1-](screenshots/labpb3.png)
 
 ## Step 5: Lab Solved
 
